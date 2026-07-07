@@ -235,7 +235,6 @@ ALIASES = {
 # --------------------------------------------------------
 # Exact Skill Extraction
 # --------------------------------------------------------
-
 def extract_exact_skills(text):
 
     cleaned = clean_text(text)
@@ -251,22 +250,26 @@ def extract_exact_skills(text):
         if not s:
             continue
 
-        # alias handling
+        if len(s) < 3:
+            continue
+
+        if s in STOP_WORDS:
+            continue
+
         if s in ALIASES:
             s = ALIASES[s]
 
-        # full phrase
         if s in cleaned:
             found.add(skill)
             continue
 
-        # token matching
         words = s.split()
 
         if all(w in tokens for w in words):
             found.add(skill)
 
     return found
+
 
 
 # --------------------------------------------------------
@@ -286,25 +289,6 @@ def expand_aliases(skills):
             expanded.add(ALIASES[s])
 
     return expanded
-
-
-# --------------------------------------------------------
-# NER Candidate Matching
-# --------------------------------------------------------
-
-def match_ner_candidates(text):
-
-    cleaned = clean_text(text)
-
-    found = set()
-
-    for candidate in ner_candidates:
-
-        if candidate in cleaned:
-
-            found.add(candidate)
-
-    return found
 
 
 # --------------------------------------------------------
