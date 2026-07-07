@@ -1,25 +1,19 @@
 """
 ==========================================================
-SkillSync - Intelligent Resume vs Job Description Analyzer
-Word2Vec + Canonical Skill Vocabulary
+SkillSync - Intelligent Resume Skill Gap Analyzer
+Word2Vec + Clean Skill Matching
 ==========================================================
 """
 
 import os
 import re
 import pickle
-from collections import defaultdict
-
-import numpy as np
-import pandas as pd
 import streamlit as st
-
 from gensim.models import Word2Vec
 
-
-# --------------------------------------------------------
-# Streamlit Page
-# --------------------------------------------------------
+# ----------------------------------------------------
+# Page Config
+# ----------------------------------------------------
 
 st.set_page_config(
     page_title="SkillSync",
@@ -28,32 +22,27 @@ st.set_page_config(
 )
 
 st.title("🧩 SkillSync")
-st.caption(
-    "AI Powered Resume Skill Gap Analyzer using Word2Vec + NLP"
-)
+st.caption("AI Resume vs Job Description Skill Gap Analyzer")
 
-# --------------------------------------------------------
-# Paths
-# --------------------------------------------------------
+# ----------------------------------------------------
+# File Paths
+# ----------------------------------------------------
 
 MODEL_PATH = "skillsync_word2vec.model"
 SKILL_PATH = "final_skill_list.pkl"
-NER_PATH = "ner_candidates.pkl"
 
-# --------------------------------------------------------
+# ----------------------------------------------------
 # Text Cleaning
-# --------------------------------------------------------
+# ----------------------------------------------------
 
 def clean_text(text):
 
     if text is None:
         return ""
 
-    text = str(text)
+    text = str(text).lower()
 
-    text = text.lower()
-
-    text = re.sub(r"http\\S+", " ", text)
+    text = re.sub(r"http\S+", " ", text)
 
     text = re.sub(
         r"[^a-zA-Z0-9+#. ]",
@@ -70,38 +59,27 @@ def clean_text(text):
     return text.strip()
 
 
-def tokenize(text):
-
-    return clean_text(text).split()
-
-# --------------------------------------------------------
+# ----------------------------------------------------
 # Load Word2Vec
-# --------------------------------------------------------
+# ----------------------------------------------------
 
 @st.cache_resource
 def load_model():
 
     try:
 
-        model = Word2Vec.load(MODEL_PATH)
-
-        return model
+        return Word2Vec.load(MODEL_PATH)
 
     except Exception as e:
 
-        st.error(
-            f"""
-Unable to load Word2Vec model.
-
-{e}
-"""
-        )
+        st.error(f"Unable to load model\n\n{e}")
 
         st.stop()
 
-# --------------------------------------------------------
-# Load Canonical Skills
-# --------------------------------------------------------
+
+# ----------------------------------------------------
+# Load Skill Vocabulary
+# ----------------------------------------------------
 
 @st.cache_resource
 def load_skill_vocab():
@@ -112,19 +90,15 @@ def load_skill_vocab():
 
             skills = pickle.load(f)
 
-        skills = sorted(
+        skills = sorted({
 
-            {
+            clean_text(i)
 
-                clean_text(s)
+            for i in skills
 
-                for s in skills
+            if len(clean_text(i)) >= 3
 
-                if len(clean_text(s)) > 1
-
-            }
-
-        )
+        })
 
         return skills
 
@@ -134,60 +108,22 @@ def load_skill_vocab():
 
         st.stop()
 
-# --------------------------------------------------------
-# Optional NER candidates
-# --------------------------------------------------------
 
-@st.cache_resource
-def load_candidates():
-
-    if not os.path.exists(NER_PATH):
-
-        return []
-
-    try:
-
-        with open(NER_PATH, "rb") as f:
-
-            data = pickle.load(f)
-
-        return list(
-
-            {
-
-                clean_text(i)
-
-                for i in data
-
-                if len(clean_text(i)) > 1
-
-            }
-
-        )
-
-    except:
-
-        return []
-
-# --------------------------------------------------------
+# ----------------------------------------------------
 # Initialize
-# --------------------------------------------------------
+# ----------------------------------------------------
 
 model = load_model()
 
 skill_vocab = load_skill_vocab()
 
-ner_candidates = load_candidates()
-
-skill_set = set(skill_vocab)
-
 st.success(
-    f"Loaded {len(skill_vocab)} canonical skills."
+    f"Loaded {len(skill_vocab)} skills."
 )
 
-# --------------------------------------------------------
-# Common Skill Aliases
-# --------------------------------------------------------
+# ----------------------------------------------------
+# Aliases
+# ----------------------------------------------------
 
 ALIASES = {
 
@@ -197,19 +133,15 @@ ALIASES = {
 
     "ai":"artificial intelligence",
 
+    "py":"python",
+
     "js":"javascript",
 
     "ts":"typescript",
 
-    "py":"python",
-
     "postgres":"postgresql",
 
     "mongo":"mongodb",
-
-    "powerbi":"power bi",
-
-    "node":"nodejs",
 
     "node.js":"nodejs",
 
@@ -219,27 +151,74 @@ ALIASES = {
 
     "express.js":"express",
 
-    "c sharp":"c#",
-
-    "dot net":".net",
-
-    "azure cloud":"azure",
+    "powerbi":"power bi",
 
     "aws cloud":"aws",
 
-    "google cloud":"gcp",
+    "azure cloud":"azure",
 
-    "google cloud platform":"gcp"
+    "google cloud":"gcp"
 
 }
-# --------------------------------------------------------
+
+# ----------------------------------------------------
+# Remove Noise
+# ----------------------------------------------------
+
+STOP_WORDS = {
+
+    "ability","abilities","working","work",
+
+    "company","client","team","knowledge",
+
+    "required","preferred","good","strong",
+
+    "excellent","support","assist","maintain",
+
+    "develop","developing","analysis",
+
+    "computer","science","engineering",
+
+    "engineer","engineers",
+
+    "technology","technologies",
+
+    "business","system","systems",
+
+    "project","projects","application",
+
+    "applications","field","solution",
+
+    "solutions","using","use"
+
+}
+
+skill_vocab = sorted({
+
+    s
+
+    for s in skill_vocab
+
+    if (
+
+        len(s) >= 3
+
+        and len(s.split()) <= 3
+
+        and s not in STOP_WORDS
+
+        and not s.isdigit()
+
+    )
+
+})
+# ----------------------------------------------------
 # Exact Skill Extraction
-# --------------------------------------------------------
+# ----------------------------------------------------
+
 def extract_exact_skills(text):
 
     cleaned = clean_text(text)
-
-    tokens = set(cleaned.split())
 
     found = set()
 
@@ -247,61 +226,39 @@ def extract_exact_skills(text):
 
         s = clean_text(skill)
 
-        if not s:
+        if s in STOP_WORDS:
             continue
 
         if len(s) < 3:
             continue
 
-        if s in STOP_WORDS:
-            continue
-
-        if s in ALIASES:
-            s = ALIASES[s]
-
-        if s in cleaned:
+        # Exact phrase match
+        if re.search(rf"\b{re.escape(s)}\b", cleaned):
             found.add(skill)
             continue
 
-        words = s.split()
+        # Alias match
+        for alias, actual in ALIASES.items():
 
-        if all(w in tokens for w in words):
-            found.add(skill)
+            if actual == s:
+
+                if re.search(rf"\b{re.escape(alias)}\b", cleaned):
+
+                    found.add(skill)
 
     return found
 
 
-
-# --------------------------------------------------------
-# Alias Expansion
-# --------------------------------------------------------
-
-def expand_aliases(skills):
-
-    expanded = set(skills)
-
-    for skill in list(skills):
-
-        s = clean_text(skill)
-
-        if s in ALIASES:
-
-            expanded.add(ALIASES[s])
-
-    return expanded
-
-
-# --------------------------------------------------------
-# Word2Vec Semantic Expansion
-# --------------------------------------------------------
+# ----------------------------------------------------
+# Semantic Matching (Word2Vec)
+# ----------------------------------------------------
 
 def semantic_expand(skills,
-                    similarity=0.55):
+                    threshold=0.70):
 
     expanded = set(skills)
 
     if model is None:
-
         return expanded
 
     for skill in list(skills):
@@ -317,7 +274,7 @@ def semantic_expand(skills,
 
                 neighbours = model.wv.most_similar(
                     word,
-                    topn=15
+                    topn=10
                 )
 
             except Exception:
@@ -325,7 +282,7 @@ def semantic_expand(skills,
 
             for neighbour, score in neighbours:
 
-                if score < similarity:
+                if score < threshold:
                     continue
 
                 for vocab_skill in skill_vocab:
@@ -341,97 +298,73 @@ def semantic_expand(skills,
     return expanded
 
 
-# --------------------------------------------------------
+# ----------------------------------------------------
 # Resume Skill Extraction
-# --------------------------------------------------------
+# ----------------------------------------------------
 
 def extract_resume_skills(text):
 
     skills = extract_exact_skills(text)
-
-    skills |= match_ner_candidates(text)
-
-    skills = expand_aliases(skills)
 
     skills = semantic_expand(skills)
 
     return sorted(skills)
 
 
-# --------------------------------------------------------
+# ----------------------------------------------------
 # JD Skill Extraction
-# --------------------------------------------------------
+# ----------------------------------------------------
 
 def extract_jd_skills(text):
 
     skills = extract_exact_skills(text)
 
-    skills |= match_ner_candidates(text)
-
-    skills = expand_aliases(skills)
-
     return sorted(skills)
-
-
-# --------------------------------------------------------
+    # ----------------------------------------------------
 # Skill Gap Analysis
-# --------------------------------------------------------
+# ----------------------------------------------------
 
-def analyze_skill_gap(resume_text,
-                      jd_text):
+def analyze_skill_gap(resume_text, jd_text):
 
-    resume_skills = set(
-        extract_resume_skills(
-            resume_text
+    resume_skills = set(extract_resume_skills(resume_text))
+    jd_skills = set(extract_jd_skills(jd_text))
+
+    # Remove noisy entries
+    resume_skills = {
+        s for s in resume_skills
+        if (
+            len(s) >= 3
+            and s not in STOP_WORDS
+            and not s.isdigit()
         )
-    )
+    }
 
-    jd_skills = set(
-        extract_jd_skills(
-            jd_text
+    jd_skills = {
+        s for s in jd_skills
+        if (
+            len(s) >= 3
+            and s not in STOP_WORDS
+            and not s.isdigit()
         )
-    )
+    }
 
-    matched = sorted(
-        resume_skills &
-        jd_skills
-    )
+    matched = sorted(resume_skills.intersection(jd_skills))
+    missing = sorted(jd_skills - resume_skills)
+    extra = sorted(resume_skills - jd_skills)
 
-    missing = sorted(
-        jd_skills -
-        resume_skills
-    )
-
-    extra = sorted(
-        resume_skills -
-        jd_skills
-    )
-
-    if len(jd_skills):
-
+    if len(jd_skills) == 0:
+        score = 0
+    else:
         score = round(
-
-            len(matched)
-            /
-            len(jd_skills)
-            *
-            100,
+            (len(matched) / len(jd_skills)) * 100,
             1
         )
 
-    else:
-
-        score = 0.0
-
     return {
 
-        "resume": sorted(
-            resume_skills
-        ),
+        "resume": sorted(resume_skills),
 
-        "jd": sorted(
-            jd_skills
-        ),
+        "jd": sorted(jd_skills),
 
         "matched": matched,
 
@@ -444,43 +377,59 @@ def analyze_skill_gap(resume_text,
     }
 
 
-# --------------------------------------------------------
-# Debug Helper
-# --------------------------------------------------------
+# ----------------------------------------------------
+# Debug
+# ----------------------------------------------------
 
 def debug_output(result):
 
-    with st.expander(
-        "Debug Output"
-    ):
+    with st.expander("🔍 Debug Output"):
 
-        st.write(
-            "Resume Skills",
-            result["resume"]
+        st.write("Resume Skills")
+
+        st.write(result["resume"])
+
+        st.write("JD Skills")
+
+        st.write(result["jd"])
+
+
+# ----------------------------------------------------
+# Recommendation
+# ----------------------------------------------------
+
+def get_recommendation(score):
+
+    if score >= 90:
+
+        return (
+            "Excellent Match ✅",
+            "Your resume strongly matches the job description."
         )
 
-        st.write(
-            "JD Skills",
-            result["jd"]
+    elif score >= 75:
+
+        return (
+            "Good Match 👍",
+            "Your profile is suitable. Improve the missing skills."
         )
 
-        st.write(
-            "Matched",
-            result["matched"]
+    elif score >= 50:
+
+        return (
+            "Average Match ⚠️",
+            "Several important skills are missing."
         )
 
-        st.write(
-            "Missing",
-            result["missing"]
-        )
+    else:
 
-        st.write(
-            "Extra",
-            result["extra"]
+        return (
+            "Low Match ❌",
+            "You need to learn more required skills before applying."
         )
-# --------------------------------------------------------
+        # ----------------------------------------------------
 # Sidebar
-# --------------------------------------------------------
+# ----------------------------------------------------
 
 with st.sidebar:
 
@@ -488,37 +437,25 @@ with st.sidebar:
 
     st.info(
         """
-Compare your Resume with a Job Description
-using NLP + Word2Vec semantic similarity.
+SkillSync compares your Resume
+with a Job Description using
 
-Features
+• Exact Skill Matching
 
-✔ Exact Skill Matching
+• Word2Vec Semantic Matching
 
-✔ Semantic Skill Matching
-
-✔ Missing Skills
-
-✔ Extra Skills
-
-✔ Match Percentage
+• Skill Gap Analysis
 """
     )
 
     st.divider()
 
-    st.write(
-        f"Canonical Skills : {len(skill_vocab)}"
-    )
-
-    st.write(
-        f"NER Candidates : {len(ner_candidates)}"
-    )
+    st.write(f"Loaded Skills : {len(skill_vocab)}")
 
 
-# --------------------------------------------------------
-# Input Area
-# --------------------------------------------------------
+# ----------------------------------------------------
+# Input
+# ----------------------------------------------------
 
 col1, col2 = st.columns(2)
 
@@ -532,10 +469,9 @@ with col1:
 
         height=350,
 
-        placeholder="Paste your resume here..."
+        placeholder="Paste Resume here..."
 
     )
-
 
 with col2:
 
@@ -547,47 +483,41 @@ with col2:
 
         height=350,
 
-        placeholder="Paste job description here..."
+        placeholder="Paste Job Description here..."
 
     )
 
-
 st.divider()
-
 
 analyze = st.button(
 
     "🔍 Analyze Skill Gap",
 
-    use_container_width=True,
+    type="primary",
 
-    type="primary"
+    use_container_width=True
 
 )
 
-# --------------------------------------------------------
-# Run Analysis
-# --------------------------------------------------------
+# ----------------------------------------------------
+# Analysis
+# ----------------------------------------------------
 
 if analyze:
 
     if resume_text.strip() == "":
 
-        st.warning(
-            "Please enter Resume."
-        )
+        st.warning("Please paste Resume.")
 
         st.stop()
 
     if jd_text.strip() == "":
 
-        st.warning(
-            "Please enter Job Description."
-        )
+        st.warning("Please paste Job Description.")
 
         st.stop()
 
-    with st.spinner("Analyzing..."):
+    with st.spinner("Analyzing Resume..."):
 
         result = analyze_skill_gap(
 
@@ -596,10 +526,6 @@ if analyze:
             jd_text
 
         )
-
-# --------------------------------------------------------
-# Metrics
-# --------------------------------------------------------
 
     st.divider()
 
@@ -637,15 +563,31 @@ if analyze:
 
     )
 
-    st.progress(
+    st.progress(result["score"]/100)
 
-        result["score"] / 100
+    title, message = get_recommendation(result["score"])
 
-    )
+    if result["score"] >= 75:
 
-# --------------------------------------------------------
-# Skill Lists
-# --------------------------------------------------------
+        st.success(title)
+
+        st.write(message)
+
+    elif result["score"] >= 50:
+
+        st.warning(title)
+
+        st.write(message)
+
+    else:
+
+        st.error(title)
+
+        st.write(message)
+
+# ----------------------------------------------------
+# Skills
+# ----------------------------------------------------
 
     c1, c2, c3 = st.columns(3)
 
@@ -661,9 +603,7 @@ if analyze:
 
         else:
 
-            st.info("No matched skills")
-
-
+            st.info("No Matched Skills")
 
     with c2:
 
@@ -677,8 +617,7 @@ if analyze:
 
         else:
 
-            st.success("No missing skills")
-
+            st.success("No Missing Skills")
 
     with c3:
 
@@ -692,170 +631,57 @@ if analyze:
 
         else:
 
-            st.write("No extra skills")
+            st.write("No Extra Skills")
 
-# --------------------------------------------------------
+# ----------------------------------------------------
 # Debug
-# --------------------------------------------------------
+# ----------------------------------------------------
 
     debug_output(result)
-# --------------------------------------------------------
-# Resume Summary
-# --------------------------------------------------------
 
-    st.divider()
-
-    st.subheader("📊 Resume Summary")
-
-    score = result["score"]
-
-    if score >= 90:
-
-        st.success(
-            """
-Excellent match!
-
-Your resume already covers almost all required skills.
-You are highly suitable for this role.
-"""
-        )
-
-    elif score >= 75:
-
-        st.success(
-            """
-Good Match.
-
-Your resume satisfies most of the required skills.
-Learning the missing skills can significantly improve your chances.
-"""
-        )
-
-    elif score >= 50:
-
-        st.warning(
-            """
-Average Match.
-
-Several important skills are missing.
-Consider improving your profile before applying.
-"""
-        )
-
-    else:
-
-        st.error(
-            """
-Low Match.
-
-Your resume currently misses many important skills.
-
-Upskilling is recommended before applying.
-"""
-        )
-
-# --------------------------------------------------------
-# Recommendations
-# --------------------------------------------------------
-
-    st.divider()
-
-    st.subheader("🎯 Learning Recommendation")
-
-    if len(result["missing"]) == 0:
-
-        st.success(
-            "No additional skills required."
-        )
-
-    else:
-
-        st.write(
-            "Recommended learning order:"
-        )
-
-        for i, skill in enumerate(result["missing"], start=1):
-
-            st.write(
-                f"{i}. {skill}"
-            )
-
-# --------------------------------------------------------
-# Resume Statistics
-# --------------------------------------------------------
-
-    st.divider()
-
-    st.subheader("📈 Statistics")
-
-    stat1, stat2, stat3 = st.columns(3)
-
-    stat1.metric(
-
-        "Resume Skills",
-
-        len(result["resume"])
-
-    )
-
-    stat2.metric(
-
-        "Job Skills",
-
-        len(result["jd"])
-
-    )
-
-    stat3.metric(
-
-        "Extra Skills",
-
-        len(result["extra"])
-
-    )
-
-# --------------------------------------------------------
-# Download Report
-# --------------------------------------------------------
+# ----------------------------------------------------
+# Report
+# ----------------------------------------------------
 
     report = f"""
+
 SkillSync Report
 
-==================================
+==========================
 
 Resume Skills
 
-{", ".join(result["resume"])}
+{', '.join(result['resume'])}
 
-----------------------------------
+--------------------------
 
-Job Description Skills
+JD Skills
 
-{", ".join(result["jd"])}
+{', '.join(result['jd'])}
 
-----------------------------------
+--------------------------
 
 Matched Skills
 
-{", ".join(result["matched"])}
+{', '.join(result['matched'])}
 
-----------------------------------
+--------------------------
 
 Missing Skills
 
-{", ".join(result["missing"])}
+{', '.join(result['missing'])}
 
-----------------------------------
+--------------------------
 
 Extra Skills
 
-{", ".join(result["extra"])}
+{', '.join(result['extra'])}
 
-----------------------------------
+--------------------------
 
-Overall Match
+Overall Score
 
-{result["score"]} %
+{result['score']} %
 
 """
 
@@ -871,14 +697,6 @@ Overall Match
 
     )
 
-# --------------------------------------------------------
-# Footer
-# --------------------------------------------------------
-
 st.divider()
 
-st.caption(
-
-    "SkillSync • NLP Resume Analyzer • Word2Vec + Semantic Matching"
-
-)
+st.caption("SkillSync • AI Resume Skill Gap Analyzer")
