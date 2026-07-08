@@ -8,7 +8,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 import spacy
-
 from gensim.models import Word2Vec
 from sklearn.cluster import KMeans
 
@@ -1173,99 +1172,8 @@ alignment with the job description.
             """
         )
 
-    # ============================================================
-    # QUICK OVERVIEW
-    # ============================================================
 
-    overview = pd.DataFrame({
-
-        "Metric":[
-            "Job Skills",
-            "Exact Match",
-            "Semantic Match",
-            "Missing Skills"
-        ],
-
-        "Value":[
-            len(jd_skills),
-            len(matched_exact),
-            len(semantic_matches),
-            len(true_gap)
-        ]
-
-    })
-
-    st.write("")
-
-    st.markdown("### 📌 Analysis Overview")
-
-    st.dataframe(
-        overview,
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.write("")
-
-    # ============================================================
-    # MATCH PERCENTAGE
-    # ============================================================
-
-    exact_percent = 0
-
-    if len(jd_skills):
-
-        exact_percent = round(
-            (len(matched_exact) /
-            len(jd_skills)) * 100,
-            1
-        )
-
-    semantic_percent = 0
-
-    if len(jd_skills):
-
-        semantic_percent = round(
-            (len(semantic_matches) /
-            len(jd_skills)) * 100,
-            1
-        )
-
-    gap_percent = 0
-
-    if len(jd_skills):
-
-        gap_percent = round(
-            (len(true_gap) /
-            len(jd_skills)) * 100,
-            1
-        )
-
-    d1, d2, d3 = st.columns(3)
-
-    with d1:
-
-        st.metric(
-            "Exact Match %",
-            f"{exact_percent}%"
-        )
-
-    with d2:
-
-        st.metric(
-            "Semantic Coverage %",
-            f"{semantic_percent}%"
-        )
-
-    with d3:
-
-        st.metric(
-            "Skill Gap %",
-            f"{gap_percent}%"
-        )
-
-    st.divider()
-    # ============================================================
+# ============================================================
 # MATCHED SKILLS
 # ============================================================
 
@@ -1289,7 +1197,7 @@ else:
 # SEMANTIC MATCHES
 # ============================================================
 
-section("🔁 Related Skills Detected")
+section("🔁 Semantic Skill Matches")
 
 if semantic_matches:
 
@@ -1319,6 +1227,15 @@ if semantic_matches:
         semantic_df,
         use_container_width=True,
         hide_index=True
+        st.info(
+    """
+**Note**
+
+These are semantic matches identified using the Word2Vec model.
+
+They indicate related skills, **not exact keyword matches**.
+"""
+)
     )
 
 else:
@@ -1336,9 +1253,23 @@ section("❌ Missing Skills")
 
 if true_gap:
 
-    show_skill_badges(
-        true_gap,
-        color="red"
+    for skill in sorted(true_gap):
+
+    priority = skill_priority(skill)
+
+    if priority == "High":
+        icon = "🔴"
+
+    elif priority == "Medium":
+        icon = "🟡"
+
+    else:
+        icon = "🟢"
+
+    st.error(f"{icon} {skill.title()}")
+
+    st.caption(
+        recommendation(skill)
     )
 
     st.write("")
@@ -1474,34 +1405,60 @@ st.dataframe(
 # ============================================================
 # RECRUITER SUMMARY
 # ============================================================
-
-section("👨‍💼 Recruiter Summary")
-
-summary = recruiter_summary(
-
+def recruiter_summary(
     ats_score,
-
     matched_exact,
-
     semantic_matches,
+    missing
+):
 
-    true_gap
+    summary = []
 
-)
+    summary.append(
+        "Overall Assessment"
+    )
 
-st.markdown(
+    if ats_score >= 80:
 
-    f"""
-<div class="summary-box">
+        summary.append(
+            "The resume demonstrates strong alignment with the target job description."
+        )
 
-{summary}
+    elif ats_score >= 60:
 
-</div>
-""",
+        summary.append(
+            "The resume has a solid technical foundation and aligns with many of the required skills."
+        )
 
-    unsafe_allow_html=True
+    else:
 
-)
+        summary.append(
+            "The resume currently lacks several important skills required for this role."
+        )
+
+    if matched_exact:
+
+        summary.append(
+            f"Exact matches: {len(matched_exact)} required technical skills."
+        )
+
+    if semantic_matches:
+
+        summary.append(
+            f"{len(semantic_matches)} additional related skills were identified through semantic matching."
+        )
+
+    if missing:
+
+        summary.append(
+            f"The resume is missing {len(missing)} important skills that should be added if applicable."
+        )
+
+    summary.append(
+        "Adding relevant projects, certifications, quantified achievements, and missing technical skills can improve ATS compatibility."
+    )
+
+    return " ".join(summary)
 
 # ============================================================
 # IMPROVEMENT RECOMMENDATIONS
@@ -1531,8 +1488,7 @@ else:
 
 if len(true_gap):
 
-    section("📌 Recommended Learning Areas")
-
+    section("📚 Suggested Skills to Learn")
     clusters = cluster_missing_skills(
 
         true_gap,
@@ -1548,6 +1504,30 @@ if len(true_gap):
             for skill in sorted(skills):
 
                 st.write("•", skill.title())
+
+
+# ============================================================
+# RESUME IMPROVEMENT CHECKLIST
+# ============================================================
+
+section("✅ Resume Improvement Checklist")
+
+checklist = []
+
+if "machine learning" in true_gap:
+    checklist.append("Add at least one Machine Learning project.")
+
+if "data engineering" in true_gap:
+    checklist.append("Mention ETL or Data Pipeline experience.")
+
+if ats_score < 80:
+    checklist.append("Include more job-specific technical keywords.")
+
+checklist.append("Quantify project achievements where possible.")
+checklist.append("Keep GitHub and LinkedIn profiles updated.")
+
+for item in checklist:
+    st.markdown(f"✅ {item}")
 
 # ============================================================
 # DOWNLOAD REPORT
