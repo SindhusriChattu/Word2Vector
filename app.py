@@ -1238,8 +1238,7 @@ They indicate related skills, **not exact keyword matches**.
 """
 )
 else:
-
-    st.success(
+st.success(
         "No semantic substitutions were required."
     )
 
