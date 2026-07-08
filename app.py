@@ -24,7 +24,8 @@ def load_artifacts():
     with open("ner_candidates.pkl", "rb") as f:
         ner_candidates = pickle.load(f)
 
-    nlp = spacy.load("en_core_web_sm")
+    import en_core_web_sm
+    nlp = en_core_web_sm.load()
 
     return w2v_model, final_skill_list, ner_candidates, nlp
 
