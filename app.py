@@ -1222,12 +1222,13 @@ if semantic_matches:
     semantic_df = pd.DataFrame(
         semantic_df
     )
-
     st.dataframe(
-        semantic_df,
-        use_container_width=True,
-        hide_index=True
-        st.info(
+    semantic_df,
+    use_container_width=True,
+    hide_index=True
+)
+
+st.info(
     """
 **Note**
 
@@ -1236,8 +1237,6 @@ These are semantic matches identified using the Word2Vec model.
 They indicate related skills, **not exact keyword matches**.
 """
 )
-    )
-
 else:
 
     st.success(
