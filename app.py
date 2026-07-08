@@ -99,15 +99,6 @@ h1,h2,h3,h4{
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# HEADER
-# ============================================================
-
-st.title("🔍 SkillSync AI")
-st.caption(
-    "Professional Resume vs Job Description Skill Gap Analyzer "
-    "using NLP, Word2Vec & Semantic Skill Matching."
-)
 
 # ============================================================
 # LOAD MODELS
