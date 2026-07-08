@@ -1,6 +1,6 @@
 streamlit
-gensim==4.3.2
+numpy<2.0
 scipy<1.13
+gensim==4.3.2
 scikit-learn
-numpy
-pandas
+spacy==3.7.4
